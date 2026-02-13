@@ -2,10 +2,12 @@
 
 import json
 import os
+import base64
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from .config import DATA_DIR
+from openai.types import FileObject
 
 
 def ensure_data_dir():
@@ -62,6 +64,51 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
 
     with open(path, 'r') as f:
         return json.load(f)
+
+
+def get_conversation_content_b64(conversation_id: str) -> Optional[str]:
+    """
+    Load a conversation from storage.
+
+    Args:
+        conversation_id: Unique identifier for the conversation
+
+    Returns:
+        Conversation dict or None if not found
+    """
+    path = get_conversation_path(conversation_id)
+
+    if not os.path.exists(path):
+        return None
+
+    with open(path, 'rb') as f:
+        return base64.b64encode(f.read()).decode("utf-8")
+
+
+def get_conversation_file_object(conversation_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Load metadata about a conversation from storage.
+
+    Args:
+        conversation_id: Unique identifier for the conversation
+
+    Returns:
+        Conversation dict or None if not found
+    """
+    path = get_conversation_path(conversation_id)
+
+    if not os.path.exists(path):
+        return None
+
+    return FileObject(
+        id=conversation_id,
+        bytes=os.path.getsize(path),
+        created_at=os.stat(path).st_birthtime,
+        filename=f"full_evaluation_{conversation_id}.txt",
+        object="file",
+        purpose="assistants_output",
+        status="processed"
+    )
 
 
 def save_conversation(conversation: Dict[str, Any]):

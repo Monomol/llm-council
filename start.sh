@@ -17,7 +17,7 @@ echo ""
 echo "✓ LLM Council is running!"
 echo "  Backend:  http://localhost:8001"
 echo ""
-echo "Press Ctrl+C to stop both servers"
+echo "Press Ctrl+C to stop server"
 
 # Wait for Ctrl+C
 trap "kill $BACKEND_PID 2>/dev/null; exit" SIGINT SIGTERM
