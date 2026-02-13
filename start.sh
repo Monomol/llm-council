@@ -13,19 +13,12 @@ BACKEND_PID=$!
 # Wait a bit for backend to start
 sleep 2
 
-# Start frontend
-echo "Starting frontend on http://localhost:5173..."
-cd frontend
-npm run dev -- --host ::  &
-FRONTEND_PID=$!
-
 echo ""
 echo "✓ LLM Council is running!"
 echo "  Backend:  http://localhost:8001"
-echo "  Frontend: http://localhost:5173"
 echo ""
 echo "Press Ctrl+C to stop both servers"
 
 # Wait for Ctrl+C
-trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" SIGINT SIGTERM
+trap "kill $BACKEND_PID 2>/dev/null; exit" SIGINT SIGTERM
 wait
