@@ -32,7 +32,7 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
 
     conversation = {
         "id": conversation_id,
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now().isoformat(),
         "title": "New Conversation",
         "messages": []
     }
