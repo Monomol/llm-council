@@ -72,9 +72,11 @@ async def send_message(request: SendMessageRequest):
         raise ValueError("No user input prompt found.")
 
 
+    # TODO: long-term you are hoping that all conversation
+    # get unique uuid, fix this
     conversation_id = str(uuid.uuid4())
 
-
+    storage.create_conversation(conversation_id)
     storage.add_user_message(conversation_id, user_prompt)
 
     # Run the 3-stage council process
