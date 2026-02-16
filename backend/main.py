@@ -66,7 +66,7 @@ async def send_message(request: SendMessageRequest):
     """
     for msg in request.messages:
         if msg.get("role") == "user":
-            user_prompt = msg.content
+            user_prompt = msg["content"]
             break
     else:
         raise ValueError("No user input prompt found.")
