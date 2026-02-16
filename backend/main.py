@@ -65,7 +65,7 @@ async def send_message(request: SendMessageRequest):
     Returns the complete response with all stages.
     """
     for msg in request.messages:
-        if isinstance(msg, ChatCompletionUserMessageParam):
+        if msg.get("role") == "user":
             user_prompt = msg.content
             break
     else:
