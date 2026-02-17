@@ -92,15 +92,6 @@ async def send_message(request: SendMessageRequest):
         stage3_result
     )
 
-    stage3_result
-
-    #     {
-    #     "stage1": stage1_results,
-    #     "stage2": stage2_results,
-    #     "stage3": stage3_result,
-    #     "metadata": metadata
-    # }
-
     # Return the complete response with metadata
     return ChatCompletion(
         id="chat-123",
