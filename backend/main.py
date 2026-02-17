@@ -113,24 +113,11 @@ async def send_message(request: SendMessageRequest):
                 message=
                     ChatCompletionMessage(
                         role="assistant",
-                        content=[{
-                            "type": "text",
-                            "text": f"The final evaluation is:\n\n{stage3_result}\n\nYou can download full evaluation sitting below:"
-                        },
-                        {
-                            "type": "file",
-                            "file": {
-                                "name": "full_evalutation_{conversation_id}.txt",
-                                "data": storage.get_conversation_content_b64(conversation_id),
-                                "mime_type": "text/plain"
-                            }
-                        }],
+                        content=f"The final evaluation is:\n\n{stage3_result}\n\nYou can download full evaluation sitting below:\n\nMAYBE IN THE FUTURE :/",
                     ),
                 finish_reason="stop",
-                logprobs=None
             )
         ],
-        usage={"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     )
 
 if __name__ == "__main__":
