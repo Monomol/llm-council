@@ -34,33 +34,6 @@ SUBMISSION_VAULT_URL = "https://is.muni.cz/dok/depository_in"
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council API"}
-
-
-async def upload_into_vault(full_evaluation: str, uco : str):
-    params = {
-        "vybos_vzorek_last": "",
-        "vybos_vzorek": uco,
-        "vybos_hledej": "Vyhledat osobu"
-    }
-
-    data = {
-        "quco": uco,
-        "vlsozav": "najax",
-        "ajax-upload": "ajax",
-        "A_POPIS_1": "processed by LLM Council"
-    }
-
-    files = {
-        "FILE_1": ("full_evaluation.json", open("test.txt", "rb"), "text/plain")
-    }
-
-    httpx.post(
-        SUBMISSION_VAULT_URL,
-        params=params,
-        data=data,
-        files=files
-    )
-
     
 
 # TODO: should I log users here?
@@ -119,6 +92,31 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
                 finish_reason="stop",
             )
         ],
+    )
+
+async def upload_into_vault(full_evaluation: str, uco : str):
+    params = {
+        "vybos_vzorek_last": "",
+        "vybos_vzorek": uco,
+        "vybos_hledej": "Vyhledat osobu"
+    }
+
+    data = {
+        "quco": uco,
+        "vlsozav": "najax",
+        "ajax-upload": "ajax",
+        "A_POPIS_1": "processed by LLM Council"
+    }
+
+    files = {
+        "FILE_1": ("full_evaluation.json", bytes(full_evaluation), "text/plain")
+    }
+
+    httpx.post(
+        SUBMISSION_VAULT_URL,
+        params=params,
+        data=data,
+        files=files
     )
 
 if __name__ == "__main__":
