@@ -2,12 +2,10 @@
 
 import json
 import os
-import base64
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from .config import DATA_DIR
-from openai.types import FileObject
 
 
 def ensure_data_dir():
@@ -66,52 +64,7 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
         return json.load(f)
 
 
-def get_conversation_content_b64(conversation_id: str) -> Optional[str]:
-    """
-    Load a conversation from storage.
-
-    Args:
-        conversation_id: Unique identifier for the conversation
-
-    Returns:
-        Conversation dict or None if not found
-    """
-    path = get_conversation_path(conversation_id)
-
-    if not os.path.exists(path):
-        return None
-
-    with open(path, 'rb') as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-
-def get_conversation_file_object(conversation_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Load metadata about a conversation from storage.
-
-    Args:
-        conversation_id: Unique identifier for the conversation
-
-    Returns:
-        Conversation dict or None if not found
-    """
-    path = get_conversation_path(conversation_id)
-
-    if not os.path.exists(path):
-        return None
-
-    return FileObject(
-        id=conversation_id,
-        bytes=os.path.getsize(path),
-        created_at=os.stat(path).st_birthtime,
-        filename=f"full_evaluation_{conversation_id}.txt",
-        object="file",
-        purpose="assistants_output",
-        status="processed"
-    )
-
-
-def save_conversation(conversation: Dict[str, Any]):
+def save_conversation(conversation: Dict[str, Any]) -> str:
     """
     Save a conversation to storage.
 
@@ -121,8 +74,10 @@ def save_conversation(conversation: Dict[str, Any]):
     ensure_data_dir()
 
     path = get_conversation_path(conversation['id'])
+    serialized = json.dumps(conversation, indent=2)
     with open(path, 'w') as f:
-        json.dump(conversation, f, indent=2)
+        f.write(serialized)
+    return serialized
 
 
 def list_conversations() -> List[Dict[str, Any]]:
@@ -179,7 +134,7 @@ def add_assistant_message(
     stage1: List[Dict[str, Any]],
     stage2: List[Dict[str, Any]],
     stage3: Dict[str, Any]
-):
+) -> str:
     """
     Add an assistant message with all 3 stages to a conversation.
 
@@ -200,7 +155,7 @@ def add_assistant_message(
         "stage3": stage3
     })
 
-    save_conversation(conversation)
+    return save_conversation(conversation)
 
 
 def update_conversation_title(conversation_id: str, title: str):
