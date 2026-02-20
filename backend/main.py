@@ -72,12 +72,12 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
         stage3_result
     )
 
-    # TODO: where do I get uco from
+    # TODO: complete with Kuba
     background_tasks.add_task(upload_into_vault, full_evaluation, "TODO")
 
     # Return the complete response with metadata
     return ChatCompletion(
-        id="chat-123",
+        id=conversation_id,
         object="chat.completion",
         created=int(time.time()),
         model="llm-council",
@@ -87,7 +87,7 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
                 message=
                     ChatCompletionMessage(
                         role="assistant",
-                        content=f"The final evaluation is:\n\n{stage3_result}\n\nYou can download full evaluation sitting below:\n\nMAYBE IN THE FUTURE :/",
+                        content=f"The final evaluation is:\n\n{stage3_result}\n\nThe full evaluation is being uploaded into your submission vault.",
                     ),
                 finish_reason="stop",
             )
