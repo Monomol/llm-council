@@ -63,7 +63,7 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
     with open(path, 'r') as f:
         return json.load(f)
 
-
+# TODO: make this return string optionally
 def save_conversation(conversation: Dict[str, Any]) -> str:
     """
     Save a conversation to storage.
@@ -133,7 +133,8 @@ def add_assistant_message(
     conversation_id: str,
     stage1: List[Dict[str, Any]],
     stage2: List[Dict[str, Any]],
-    stage3: Dict[str, Any]
+    stage3: Dict[str, Any],
+    metadata: Dict[str, Any],
 ) -> str:
     """
     Add an assistant message with all 3 stages to a conversation.
@@ -152,7 +153,8 @@ def add_assistant_message(
         "role": "assistant",
         "stage1": stage1,
         "stage2": stage2,
-        "stage3": stage3
+        "stage3": stage3,
+        "metadata": metadata
     })
 
     return save_conversation(conversation)

@@ -55,7 +55,7 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
         user_uco = user_prompt[:user_prompt.find("\n")].split("@")[0]
     except:
         # TODO: examine with Kuba, what does such response look like and how does it get handled
-        raise ValueError("Could not get user's UCO.")
+        raise ValueError("Could not get user's UČO.")
 
 
     conversation_id = f"{uuid.uuid4()}_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")}"
@@ -69,13 +69,12 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
         INTERACTIVE_LEARNING_SYSTEM_PROMPT
     )
 
-    # TODO: do we want to send metadata as well?
-    # Add assistant message with all stages
     full_evaluation = storage.add_assistant_message(
         conversation_id,
         stage1_results,
         stage2_results,
-        stage3_result
+        stage3_result,
+        metadata
     )
 
     background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
