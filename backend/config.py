@@ -12,7 +12,7 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 COUNCIL_MODELS = [
     "deepseek-v3.2-thinking",
     "gpt-oss-120b",
-    "mistral-large",
+    # "mistral-large", # seems to be broken?
     "glm-4.7"
 ]
 
