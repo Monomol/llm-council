@@ -77,6 +77,8 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
         metadata
     )
 
+    final_result = stage3_result['response']
+
     background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
 
     # Return the complete response with metadata
@@ -91,7 +93,7 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
                 message=
                     ChatCompletionMessage(
                         role="assistant",
-                        content=f"The final evaluation is:\n\n{stage3_result}\n\nThe full evaluation is being uploaded into your submission vault.",
+                        content=f"The final assessment is:\n\n{final_result}\n\nThe full evaluation is being uploaded into your submission vault.",
                     ),
                 finish_reason="stop",
             )
