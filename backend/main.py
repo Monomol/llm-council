@@ -1,16 +1,14 @@
 """FastAPI backend for LLM Council."""
 
 import time
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List
 import uuid
-from openai.types import FileObject
-from fastapi.responses import Response
-from openai.types.chat import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageParam, ChatCompletionUserMessageParam
-from openai.types.chat.chat_completion import Choice, ChoiceLogprobs
+import httpx
+from openai.types.chat import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageParam
+from openai.types.chat.chat_completion import Choice
 
 from . import storage
 from .council import run_full_council
@@ -30,36 +28,17 @@ app.add_middleware(
 class SendMessageRequest(BaseModel):
     messages: List[ChatCompletionMessageParam]
 
+SUBMISSION_VAULT_URL = "https://is.muni.cz/dok/depository_in"
 
 @app.get("/")
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council API"}
-
-# # TODO: no authetication is done here, possible other users
-# # can maliciously access other users's messages
-# @app.get("/v1/files/{conversation_id}", response_model=FileObject)
-# async def retrieve_file_metadata(conversation_id: str):
-#     file_object = storage.get_conversation_file_object(conversation_id)
-#     return file_object if file_object is not None else ValueError("No such conversation exists.")
-
-# # TODO: no authetication is done here, possible other users
-# # can maliciously access other users's messages
-# @app.get("/v1/files/{conversation_id}/content")
-# async def get_file_content(conversation_id: str):
-#     content = storage.get_conversation_content(conversation_id)
-#     if content is None:
-#         raise ValueError("No such conversation exists.")
-#     return Response(
-#         content=content, 
-#         media_type="application/octet-stream",
-#         headers={"Content-Disposition": f"attachment; filename=full_evaluation_{conversation_id}.txt"}
-#     )
-
+    
 
 # TODO: should I log users here?
 @app.post("/v1/chat/completions", response_model=ChatCompletion)
-async def send_message(request: SendMessageRequest):
+async def send_message(request: SendMessageRequest, background_tasks: BackgroundTasks):
     """
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
@@ -84,17 +63,21 @@ async def send_message(request: SendMessageRequest):
         user_prompt
     )
 
+    # TODO: do we want to send metadata as well?
     # Add assistant message with all stages
-    storage.add_assistant_message(
+    full_evaluation = storage.add_assistant_message(
         conversation_id,
         stage1_results,
         stage2_results,
         stage3_result
     )
 
+    # TODO: complete with Kuba
+    background_tasks.add_task(upload_into_vault, full_evaluation, "TODO")
+
     # Return the complete response with metadata
     return ChatCompletion(
-        id="chat-123",
+        id=conversation_id,
         object="chat.completion",
         created=int(time.time()),
         model="llm-council",
@@ -104,11 +87,36 @@ async def send_message(request: SendMessageRequest):
                 message=
                     ChatCompletionMessage(
                         role="assistant",
-                        content=f"The final evaluation is:\n\n{stage3_result}\n\nYou can download full evaluation sitting below:\n\nMAYBE IN THE FUTURE :/",
+                        content=f"The final evaluation is:\n\n{stage3_result}\n\nThe full evaluation is being uploaded into your submission vault.",
                     ),
                 finish_reason="stop",
             )
         ],
+    )
+
+async def upload_into_vault(full_evaluation: str, uco : str):
+    params = {
+        "vybos_vzorek_last": "",
+        "vybos_vzorek": uco,
+        "vybos_hledej": "Vyhledat osobu"
+    }
+
+    data = {
+        "quco": uco,
+        "vlsozav": "najax",
+        "ajax-upload": "ajax",
+        "A_POPIS_1": "processed by LLM Council"
+    }
+
+    files = {
+        "FILE_1": ("full_evaluation.json", bytes(full_evaluation), "text/plain")
+    }
+
+    httpx.post(
+        SUBMISSION_VAULT_URL,
+        params=params,
+        data=data,
+        files=files
     )
 
 if __name__ == "__main__":
