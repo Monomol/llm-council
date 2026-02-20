@@ -181,6 +181,8 @@ Your task as Chairman is to synthesize all of this information into a single, co
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
 
+In your response, do not comment on the ranking process (i. e., do not mention which models participated in the assessment, were the best, etc.).
+
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
 
     messages = [{"role": "user", "content": chairman_prompt}]
