@@ -4,6 +4,18 @@ from typing import List, Dict, Any, Tuple
 from .openrouter import query_models_parallel, query_model
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
+INTERACTIVE_LEARNING_SYSTEM_PROMPT="""You are an agent evaluating a performance of \
+a student based on a provided transcript of an examination between a "USER" and an "ASSISTANT".
+You HAVE TO fact-check USER's responses; DO NOT trust ASSISTANT's replies.
+Make sure your evaluation contains summaries of:
+* the examined topics,
+* what topics the "USER" understands,
+* what topics the "USER" does not understand,
+* what topics should the "USER" study more,
+* overall high-level assessment of the examination.
+Make sure you DO NOT provide any grading.
+"""
+EVALUTATION_SYSTEM_PROMPT=""
 
 async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
     """
@@ -15,7 +27,7 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
     Returns:
         List of dicts with 'model' and 'response' keys
     """
-    messages = [{"role": "user", "content": user_query}]
+    messages = [{"role" : "system", "content" : INTERACTIVE_LEARNING_SYSTEM_PROMPT}, {"role": "user", "content": user_query}]
 
     # Query all models in parallel
     responses = await query_models_parallel(COUNCIL_MODELS, messages)
