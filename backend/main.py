@@ -93,7 +93,7 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
                 message=
                     ChatCompletionMessage(
                         role="assistant",
-                        content=f"The final assessment is:\n\n{final_result}\n\nThe full evaluation is being uploaded into your submission vault.",
+                        content=f"## The final assessment is:\n\n{final_result}\n\n## ⬆️ The full evaluation is being uploaded into your submission vault.",
                     ),
                 finish_reason="stop",
             )

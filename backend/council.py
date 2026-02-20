@@ -183,6 +183,8 @@ Your task as Chairman is to synthesize all of this information into a single, co
 
 In your response, do not comment on the ranking process (i. e., do not mention which models participated in the assessment, were the best, etc.).
 
+Also, instead of speaking about some "USER" be direct as you are speaking to a user.
+
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
 
     messages = [{"role": "user", "content": chairman_prompt}]
