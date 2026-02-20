@@ -1,6 +1,7 @@
 """FastAPI backend for LLM Council."""
 
 import time
+import datetime
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,7 +12,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionMessage, ChatComplet
 from openai.types.chat.chat_completion import Choice
 
 from . import storage
-from .council import run_full_council
+from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
 
 app = FastAPI(title="LLM Council API")
 
@@ -50,17 +51,22 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
     else:
         raise ValueError("No user input prompt found.")
 
+    try:
+        user_uco = user_prompt[:user_prompt.find("\n")].split("@")[0]
+    except:
+        # TODO: examine with Kuba, what does such response look like and how does it get handled
+        raise ValueError("Could not get user's UCO.")
 
-    # TODO: long-term you are hoping that all conversation
-    # get unique uuid, fix this
-    conversation_id = str(uuid.uuid4())
+
+    conversation_id = f"{uuid.uuid4()}_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")}"
 
     storage.create_conversation(conversation_id)
     storage.add_user_message(conversation_id, user_prompt)
 
     # Run the 3-stage council process
     stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        user_prompt
+        user_prompt,
+        INTERACTIVE_LEARNING_SYSTEM_PROMPT
     )
 
     # TODO: do we want to send metadata as well?
@@ -72,8 +78,7 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
         stage3_result
     )
 
-    # TODO: complete with Kuba
-    background_tasks.add_task(upload_into_vault, full_evaluation, "TODO")
+    background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
 
     # Return the complete response with metadata
     return ChatCompletion(
