@@ -113,7 +113,7 @@ async def upload_into_vault(full_evaluation: str, uco : str):
     }
 
     files = {
-        "FILE_1": ("full_evaluation.json", bytes(full_evaluation), "text/plain")
+        "FILE_1": ("full_evaluation.json", full_evaluation.encode(), "text/plain")
     }
 
     httpx.post(
