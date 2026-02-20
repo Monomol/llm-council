@@ -341,7 +341,7 @@ async def run_full_council(user_query: str, system_prompt: str) -> Tuple[List, L
         }, {}
 
     # Stage 2: Collect rankings
-    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
+    stage2_results, label_to_model = await stage2_collect_rankings(user_query, system_prompt, stage1_results)
 
     # Calculate aggregate rankings
     aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
