@@ -58,7 +58,7 @@ async def send_message(request: SendMessageRequest, background_tasks: Background
         raise ValueError("Could not get user's UČO.")
 
 
-    conversation_id = f"{uuid.uuid4()}_{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")}"
+    conversation_id = f"{uuid.uuid4()}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')}"
 
     storage.create_conversation(conversation_id)
     storage.add_user_message(conversation_id, user_prompt)
