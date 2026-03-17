@@ -4,18 +4,29 @@ from typing import List, Dict, Any, Tuple
 from .openrouter import query_models_parallel, query_model
 from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
+INTERACTIVE_LEARNING_SYSTEM_PROMPT="""\
+You are assessing performance of a "USER" based on a provided transcript of an examination between the "USER" and an "ASSISTANT".
+You HAVE TO fact-check USER's responses; DO NOT trust ASSISTANT's replies.
+Your assessment MUST comprise of summaries of the following aspects:
+* The examined topics
+* What topics the "USER" understands
+* What topics the "USER" does not understand
+* What topics should the "USER" study more
+* Overall high-level assessment of the examination
+Make sure you DO NOT provide any grading.
+"""
 
-async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
+async def stage1_collect_responses(user_query: str, system_prompt: str) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
-        user_query: The user's question
+        user_query: The user's transcript
 
     Returns:
         List of dicts with 'model' and 'response' keys
     """
-    messages = [{"role": "user", "content": user_query}]
+    messages = [{"role" : "system", "content" : system_prompt}, {"role": "user", "content": user_query}]
 
     # Query all models in parallel
     responses = await query_models_parallel(COUNCIL_MODELS, messages)
@@ -34,6 +45,7 @@ async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
 
 async def stage2_collect_rankings(
     user_query: str,
+    system_prompt: str,
     stage1_results: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
@@ -61,9 +73,15 @@ async def stage2_collect_rankings(
         for label, result in zip(labels, stage1_results)
     ])
 
-    ranking_prompt = f"""You are evaluating different responses to the following question:
+    ranking_prompt = f"""You are evaluating different solutions to the following task:
 
-Question: {user_query}
+{system_prompt}
+
+Provided transcript:
+
+=== START ===
+{user_query}
+=== END ===
 
 Here are the responses from different models (anonymized):
 
@@ -114,6 +132,7 @@ Now provide your evaluation and ranking:"""
 
 async def stage3_synthesize_final(
     user_query: str,
+    system_prompt: str,
     stage1_results: List[Dict[str, Any]],
     stage2_results: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
@@ -139,9 +158,17 @@ async def stage3_synthesize_final(
         for result in stage2_results
     ])
 
-    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided responses to a user's question, and then ranked each other's responses.
+    chairman_prompt = f"""You are the Chairman of an LLM Council. Multiple AI models have provided solutions to a user's task, and then ranked each other's responses.
 
-Original Question: {user_query}
+Original Task:
+
+{system_prompt}
+
+Provided Trascript:
+
+=== START ===
+{user_query}
+=== END ===
 
 STAGE 1 - Individual Responses:
 {stage1_text}
@@ -149,10 +176,14 @@ STAGE 1 - Individual Responses:
 STAGE 2 - Peer Rankings:
 {stage2_text}
 
-Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
+Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate solution to the user's original task. Consider:
 - The individual responses and their insights
 - The peer rankings and what they reveal about response quality
 - Any patterns of agreement or disagreement
+
+In your response, do not comment on the ranking process (i. e., do not mention which models participated in the assessment, were the best, etc.).
+
+Also, instead of speaking about some "USER" be direct as you are speaking to a user.
 
 Provide a clear, well-reasoned final answer that represents the council's collective wisdom:"""
 
@@ -265,7 +296,7 @@ async def generate_conversation_title(user_query: str) -> str:
     Returns:
         A short title (3-5 words)
     """
-    title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following question.
+    title_prompt = f"""Generate a very short title (3-5 words maximum) that summarizes the following task.
 The title should be concise and descriptive. Do not use quotes or punctuation in the title.
 
 Question: {user_query}
@@ -293,18 +324,18 @@ Title:"""
     return title
 
 
-async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(user_query: str, system_prompt: str) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process.
 
     Args:
-        user_query: The user's question
+        user_query: The user's transcript of an examination
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
     # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(user_query)
+    stage1_results = await stage1_collect_responses(user_query, system_prompt)
 
     # If no models responded successfully, return error
     if not stage1_results:
@@ -314,7 +345,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
         }, {}
 
     # Stage 2: Collect rankings
-    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
+    stage2_results, label_to_model = await stage2_collect_rankings(user_query, system_prompt, stage1_results)
 
     # Calculate aggregate rankings
     aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
@@ -322,6 +353,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     # Stage 3: Synthesize final answer
     stage3_result = await stage3_synthesize_final(
         user_query,
+        system_prompt,
         stage1_results,
         stage2_results
     )

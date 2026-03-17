@@ -1,197 +1,122 @@
 """FastAPI backend for LLM Council."""
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+import time
+from fastapi import FastAPI, Depends, HTTPException, Request, status, BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import Set, Optional
 import uuid
-import json
-import asyncio
+import logging
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from . import storage
-from .council import run_full_council, generate_conversation_title, stage1_collect_responses, stage2_collect_rankings, stage3_synthesize_final, calculate_aggregate_rankings
+from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
+from .db import get_submissions
+from .config import ALLOWED_TOKENS
 
-app = FastAPI(title="LLM Council API")
+logging.basicConfig(
+    filename="logs/log.txt",
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 
-# Enable CORS for local development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
+logger = logging.getLogger(__name__)
 
-class CreateConversationRequest(BaseModel):
-    """Request to create a new conversation."""
-    pass
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="LLM Council API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+security = HTTPBearer()
 
-class SendMessageRequest(BaseModel):
-    """Request to send a message in a conversation."""
-    content: str
+def validate_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials.credentials not in ALLOWED_TOKENS:
+        # We use a generic error to prevent "leaking" which tokens are valid
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials
 
-
-class ConversationMetadata(BaseModel):
-    """Conversation metadata for list view."""
-    id: str
-    created_at: str
-    title: str
-    message_count: int
-
-
-class Conversation(BaseModel):
-    """Full conversation with all messages."""
-    id: str
-    created_at: str
-    title: str
-    messages: List[Dict[str, Any]]
+class ProcessRequest(BaseModel):
+    pipe_id: str
+    submit_ids: Optional[Set[int]]
+    student_emails: Optional[Set[str]]
+    head_n_results: Optional[int]
 
 
 @app.get("/")
 async def root():
     """Health check endpoint."""
     return {"status": "ok", "service": "LLM Council API"}
+    
 
-
-@app.get("/api/conversations", response_model=List[ConversationMetadata])
-async def list_conversations():
-    """List all conversations (metadata only)."""
-    return storage.list_conversations()
-
-
-@app.post("/api/conversations", response_model=Conversation)
-async def create_conversation(request: CreateConversationRequest):
-    """Create a new conversation."""
-    conversation_id = str(uuid.uuid4())
-    conversation = storage.create_conversation(conversation_id)
-    return conversation
-
-
-@app.get("/api/conversations/{conversation_id}", response_model=Conversation)
-async def get_conversation(conversation_id: str):
-    """Get a specific conversation with all its messages."""
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    return conversation
-
-
-@app.post("/api/conversations/{conversation_id}/message")
-async def send_message(conversation_id: str, request: SendMessageRequest):
+@app.post("/process", status_code=status.HTTP_200_OK, dependencies=[Depends(validate_token)])
+@limiter.limit("5/minute")
+async def process(request: ProcessRequest, background_tasks: BackgroundTasks) -> str:
     """
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
     """
-    # Check if conversation exists
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
 
-    # Check if this is the first message
-    is_first_message = len(conversation["messages"]) == 0
-
-    # Add user message
-    storage.add_user_message(conversation_id, request.content)
-
-    # If this is the first message, generate a title
-    if is_first_message:
-        title = await generate_conversation_title(request.content)
-        storage.update_conversation_title(conversation_id, title)
-
-    # Run the 3-stage council process
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        request.content
+    trace_id = str(uuid.uuid4())[:8]
+    start_time = time.perf_counter()
+    
+    # Meaningful Start Log: capture input scope without dumping huge lists
+    logger.info(
+        f"[{trace_id}] Started processing | pipe_id: {request.pipe_id} | "
+        f"filter_ids: {len(request.submit_ids) if request.submit_ids else 0} | "
+        f"filter_emails: {len(request.student_emails) if request.student_emails else 0}"
     )
 
-    # Add assistant message with all stages
-    storage.add_assistant_message(
-        conversation_id,
-        stage1_results,
-        stage2_results,
-        stage3_result
-    )
+    try:
+        sumbissions = get_submissions(request)
+        
+        duration = time.perf_counter() - start_time
+        logger.info(
+            f"[{trace_id}] Query successful | returned: {len(sumbissions)} records | "
+            f"duration: {duration:.4f}s"
+        )
 
-    # Return the complete response with metadata
-    return {
-        "stage1": stage1_results,
-        "stage2": stage2_results,
-        "stage3": stage3_result,
-        "metadata": metadata
-    }
+        for submission in sumbissions:
+            submission_start = time.perf_counter()
 
+            logger.info(f"[{trace_id}] Sub-task: Starting Council for Student {submission.email} (ID: {submission.id})")
+            storage.create_conversation(submission.id)
+            storage.add_user_message(submission.id, submission.transcript)
 
-@app.post("/api/conversations/{conversation_id}/message/stream")
-async def send_message_stream(conversation_id: str, request: SendMessageRequest):
-    """
-    Send a message and stream the 3-stage council process.
-    Returns Server-Sent Events as each stage completes.
-    """
-    # Check if conversation exists
-    conversation = storage.get_conversation(conversation_id)
-    if conversation is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-
-    # Check if this is the first message
-    is_first_message = len(conversation["messages"]) == 0
-
-    async def event_generator():
-        try:
-            # Add user message
-            storage.add_user_message(conversation_id, request.content)
-
-            # Start title generation in parallel (don't await yet)
-            title_task = None
-            if is_first_message:
-                title_task = asyncio.create_task(generate_conversation_title(request.content))
-
-            # Stage 1: Collect responses
-            yield f"data: {json.dumps({'type': 'stage1_start'})}\n\n"
-            stage1_results = await stage1_collect_responses(request.content)
-            yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
-
-            # Stage 2: Collect rankings
-            yield f"data: {json.dumps({'type': 'stage2_start'})}\n\n"
-            stage2_results, label_to_model = await stage2_collect_rankings(request.content, stage1_results)
-            aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
-            yield f"data: {json.dumps({'type': 'stage2_complete', 'data': stage2_results, 'metadata': {'label_to_model': label_to_model, 'aggregate_rankings': aggregate_rankings}})}\n\n"
-
-            # Stage 3: Synthesize final answer
-            yield f"data: {json.dumps({'type': 'stage3_start'})}\n\n"
-            stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
-            yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
-
-            # Wait for title generation if it was started
-            if title_task:
-                title = await title_task
-                storage.update_conversation_title(conversation_id, title)
-                yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
-
-            # Save complete assistant message
-            storage.add_assistant_message(
-                conversation_id,
-                stage1_results,
-                stage2_results,
-                stage3_result
+            # Run the 3-stage council process
+            stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+                submission.transcript,
+                INTERACTIVE_LEARNING_SYSTEM_PROMPT
             )
 
-            # Send completion event
-            yield f"data: {json.dumps({'type': 'complete'})}\n\n"
+            full_evaluation = storage.add_assistant_message(
+                submission.id,
+                stage1_results,
+                stage2_results,
+                stage3_result,
+                metadata
+            )
 
-        except Exception as e:
-            # Send error event
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            submission_duration = time.perf_counter() - submission_start
+            logger.info(f"[{trace_id}] Submission {submission.id} processed successfully | duration: {submission_duration:.2f}s")
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
-    )
+            final_result = stage3_result['response']
+
+            # TODO: implement the email sending
+            # background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
+        return {"status": "OK"}
+
+    except Exception as e:
+        logger.error(f"[{trace_id}] Critical failure: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Processing failed")
+
 
 
 if __name__ == "__main__":
