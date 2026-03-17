@@ -1,35 +1,54 @@
 """FastAPI backend for LLM Council."""
 
 import time
-import datetime
-from fastapi import FastAPI, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Depends, HTTPException, Request, status, BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List
+from typing import Set, Optional
 import uuid
-import httpx
-from openai.types.chat import ChatCompletion, ChatCompletionMessage, ChatCompletionMessageParam
-from openai.types.chat.chat_completion import Choice
+import logging
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from . import storage
 from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
+from .db import get_submissions
+from .config import ALLOWED_TOKENS
 
-app = FastAPI(title="LLM Council API")
+logging.basicConfig(
+    filename="logs/log.txt",
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 
-# Enable CORS for local development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
 )
 
+logger = logging.getLogger(__name__)
 
-class SendMessageRequest(BaseModel):
-    messages: List[ChatCompletionMessageParam]
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="LLM Council API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-SUBMISSION_VAULT_URL = "https://is.muni.cz/dok/depository_in"
+security = HTTPBearer()
+
+def validate_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if credentials.credentials not in ALLOWED_TOKENS:
+        # We use a generic error to prevent "leaking" which tokens are valid
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return credentials.credentials
+
+class ProcessRequest(BaseModel):
+    pipe_id: str
+    submit_ids: Optional[Set[int]]
+    student_emails: Optional[Set[str]]
+    head_n_results: Optional[int]
+
 
 @app.get("/")
 async def root():
@@ -37,93 +56,68 @@ async def root():
     return {"status": "ok", "service": "LLM Council API"}
     
 
-# TODO: should I log users here?
-@app.post("/v1/chat/completions", response_model=ChatCompletion)
-async def send_message(request: SendMessageRequest, background_tasks: BackgroundTasks):
+@app.post("/process", status_code=status.HTTP_200_OK, dependencies=[Depends(validate_token)])
+@limiter.limit("5/minute")
+async def process(request: ProcessRequest, background_tasks: BackgroundTasks) -> str:
     """
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
     """
-    for msg in request.messages:
-        if msg.get("role") == "user":
-            user_prompt = msg["content"]
-            break
-    else:
-        raise ValueError("No user input prompt found.")
+
+    trace_id = str(uuid.uuid4())[:8]
+    start_time = time.perf_counter()
+    
+    # Meaningful Start Log: capture input scope without dumping huge lists
+    logger.info(
+        f"[{trace_id}] Started processing | pipe_id: {request.pipe_id} | "
+        f"filter_ids: {len(request.submit_ids) if request.submit_ids else 0} | "
+        f"filter_emails: {len(request.student_emails) if request.student_emails else 0}"
+    )
 
     try:
-        user_uco = user_prompt[:user_prompt.find("\n")].split("@")[0]
-    except:
-        # TODO: examine with Kuba, what does such response look like and how does it get handled
-        raise ValueError("Could not get user's UČO.")
+        sumbissions = get_submissions(request)
+        
+        duration = time.perf_counter() - start_time
+        logger.info(
+            f"[{trace_id}] Query successful | returned: {len(sumbissions)} records | "
+            f"duration: {duration:.4f}s"
+        )
 
+        for submission in sumbissions:
+            submission_start = time.perf_counter()
 
-    conversation_id = f"{uuid.uuid4()}_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')}"
+            logger.info(f"[{trace_id}] Sub-task: Starting Council for Student {submission.email} (ID: {submission.id})")
+            storage.create_conversation(submission.id)
+            storage.add_user_message(submission.id, submission.transcript)
 
-    storage.create_conversation(conversation_id)
-    storage.add_user_message(conversation_id, user_prompt)
-
-    # Run the 3-stage council process
-    stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
-        user_prompt,
-        INTERACTIVE_LEARNING_SYSTEM_PROMPT
-    )
-
-    full_evaluation = storage.add_assistant_message(
-        conversation_id,
-        stage1_results,
-        stage2_results,
-        stage3_result,
-        metadata
-    )
-
-    final_result = stage3_result['response']
-
-    background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
-
-    # Return the complete response with metadata
-    return ChatCompletion(
-        id=conversation_id,
-        object="chat.completion",
-        created=int(time.time()),
-        model="llm-council",
-        choices=[
-            Choice(
-                index=0,
-                message=
-                    ChatCompletionMessage(
-                        role="assistant",
-                        content=f"## The final assessment is:\n\n{final_result}\n\n## ⬆️ The full evaluation is being uploaded into your submission vault.",
-                    ),
-                finish_reason="stop",
+            # Run the 3-stage council process
+            stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
+                submission.transcript,
+                INTERACTIVE_LEARNING_SYSTEM_PROMPT
             )
-        ],
-    )
 
-async def upload_into_vault(full_evaluation: str, uco : str):
-    params = {
-        "vybos_vzorek_last": "",
-        "vybos_vzorek": uco,
-        "vybos_hledej": "Vyhledat osobu"
-    }
+            full_evaluation = storage.add_assistant_message(
+                submission.id,
+                stage1_results,
+                stage2_results,
+                stage3_result,
+                metadata
+            )
 
-    data = {
-        "quco": uco,
-        "vlsozav": "najax",
-        "ajax-upload": "ajax",
-        "A_POPIS_1": "processed by LLM Council"
-    }
+            submission_duration = time.perf_counter() - submission_start
+            logger.info(f"[{trace_id}] Submission {submission.id} processed successfully | duration: {submission_duration:.2f}s")
 
-    files = {
-        "FILE_1": ("full_evaluation.json", full_evaluation.encode(), "text/plain")
-    }
+            final_result = stage3_result['response']
 
-    httpx.post(
-        SUBMISSION_VAULT_URL,
-        params=params,
-        data=data,
-        files=files
-    )
+            # TODO: implement the email sending
+            # background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
+        return {"status": "OK"}
+
+    except Exception as e:
+        logger.error(f"[{trace_id}] Critical failure: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Processing failed")
+
+
 
 if __name__ == "__main__":
     import uvicorn

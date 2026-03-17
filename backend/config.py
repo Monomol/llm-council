@@ -8,6 +8,12 @@ load_dotenv()
 # OpenRouter API key
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+SUBMIT_DB_URL = os.getenv("SUBMIT_DB_URL")
+SCHEMA_NAME = os.getenv("SCHEMA_NAME")
+ALLOWED_TOKENS = set(
+    t.strip() for t in os.getenv("API_ALLOWED_TOKENS", "").split(",") if t.strip()
+)
+
 # Council members - list of OpenRouter model identifiers
 COUNCIL_MODELS = [
     "deepseek-v3.2-thinking",
