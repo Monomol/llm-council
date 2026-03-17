@@ -3,8 +3,6 @@
 import time
 from fastapi import FastAPI, Depends, HTTPException, Request, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
-from typing import Set, Optional
 import uuid
 import logging
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -15,6 +13,7 @@ from . import storage
 from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
 from .db import get_submissions
 from .config import ALLOWED_TOKENS
+from .objects import ProcessRequest
 
 logging.basicConfig(
     filename="logs/log.txt",
@@ -42,13 +41,6 @@ def validate_token(credentials: HTTPAuthorizationCredentials = Depends(security)
             headers={"WWW-Authenticate": "Bearer"},
         )
     return credentials.credentials
-
-class ProcessRequest(BaseModel):
-    pipe_id: str
-    submit_ids: Optional[Set[int]]
-    student_emails: Optional[Set[str]]
-    head_n_results: Optional[int]
-
 
 @app.get("/")
 async def root():

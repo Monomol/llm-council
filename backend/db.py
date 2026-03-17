@@ -1,7 +1,7 @@
-from sqlalchemy import select, desc, func, create_engine
-from sqlalchemy.orm import Session, DeclarativeBase, Column, Integer, Text, TIMESTAMP
+from sqlalchemy import select, desc, func, create_engine, Column, Integer, Text, TIMESTAMP
+from sqlalchemy.orm import Session, DeclarativeBase
 from .config import SUBMIT_DB_URL, SCHEMA_NAME
-from .main import ProcessRequest
+from .objects import ProcessRequest
 from typing import List
 from datetime import datetime
 
