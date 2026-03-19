@@ -25,6 +25,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Due to the limiter, we have to inject fastapi_request: Request
 limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(title="LLM Council API")
 app.state.limiter = limiter
@@ -32,7 +33,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 security = HTTPBearer()
 
-def validate_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def validate_token(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     if credentials.credentials not in ALLOWED_TOKENS:
         # We use a generic error to prevent "leaking" which tokens are valid
         raise HTTPException(
@@ -42,6 +43,7 @@ def validate_token(credentials: HTTPAuthorizationCredentials = Depends(security)
         )
     return credentials.credentials
 
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
@@ -49,8 +51,8 @@ async def root():
     
 
 @app.post("/process", status_code=status.HTTP_200_OK, dependencies=[Depends(validate_token)])
-@limiter.limit("5/minute")
-async def process(request: ProcessRequest, background_tasks: BackgroundTasks) -> str:
+@limiter.limit("100/minute")
+async def process(payload: ProcessRequest, request: Request, background_tasks: BackgroundTasks) -> str:
     """
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
@@ -61,13 +63,13 @@ async def process(request: ProcessRequest, background_tasks: BackgroundTasks) ->
     
     # Meaningful Start Log: capture input scope without dumping huge lists
     logger.info(
-        f"[{trace_id}] Started processing | pipe_id: {request.pipe_id} | "
-        f"filter_ids: {len(request.submit_ids) if request.submit_ids else 0} | "
-        f"filter_emails: {len(request.student_emails) if request.student_emails else 0}"
+        f"[{trace_id}] Started processing | pipe_id: {payload.pipe_id} | "
+        f"filter_ids: {len(payload.submit_ids) if payload.submit_ids else 0} | "
+        f"filter_emails: {len(payload.student_emails) if payload.student_emails else 0}"
     )
 
     try:
-        sumbissions = get_submissions(request)
+        sumbissions = get_submissions(payload)
         
         duration = time.perf_counter() - start_time
         logger.info(
