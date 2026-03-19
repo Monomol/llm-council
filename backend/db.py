@@ -43,9 +43,14 @@ def get_submissions(request: ProcessRequest) -> List[Submit]:
             stmt = stmt.where(Submit.email.in_(request.student_emails))
 
         subquery = stmt.subquery()
-        final_stmt = select(Submit).from_statement(
-            select(Submit).from_objs(subquery).order_by(func.random())
-        )
+        final_stmt = select(Submit).select_from(subquery)
+
+        if request.random_sample:
+            # Shuffle the deduplicated results
+            final_stmt = final_stmt.order_by(func.random())
+        else:
+            # Consistent ordering (e.g., most recent first)
+            final_stmt = final_stmt.order_by(desc(subquery.c.created_at))
 
         if request.head_n_results is not None:
             final_stmt = final_stmt.limit(request.head_n_results)
