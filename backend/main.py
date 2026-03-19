@@ -13,7 +13,7 @@ from . import storage
 from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
 from .db import get_submissions
 from .config import ALLOWED_TOKENS
-from .objects import ProcessRequest
+from .objects import ProcessPayload
 
 logging.basicConfig(
     filename="data/logs/log.txt",
@@ -52,7 +52,7 @@ async def root():
 
 @app.post("/process", status_code=status.HTTP_200_OK, dependencies=[Depends(validate_token)])
 @limiter.limit("100/minute")
-async def process(payload: ProcessRequest, request: Request, background_tasks: BackgroundTasks) -> str:
+async def process(payload: ProcessPayload, request: Request, background_tasks: BackgroundTasks) -> dict:
     """
     Send a message and run the 3-stage council process.
     Returns the complete response with all stages.
@@ -70,6 +70,7 @@ async def process(payload: ProcessRequest, request: Request, background_tasks: B
 
     try:
         sumbissions = get_submissions(payload)
+        successfully_processed = []
         
         duration = time.perf_counter() - start_time
         logger.info(
@@ -102,14 +103,15 @@ async def process(payload: ProcessRequest, request: Request, background_tasks: B
             logger.info(f"[{trace_id}] Submission {submission.id} processed successfully | duration: {submission_duration:.2f}s")
 
             final_result = stage3_result['response']
+            successfully_processed.append(submission.id)
 
             # TODO: implement the email sending
             # background_tasks.add_task(upload_into_vault, full_evaluation, user_uco)
-        return {"status": "OK"}
+        return {"status": "OK", "processed": successfully_processed}
 
     except Exception as e:
         logger.error(f"[{trace_id}] Critical failure: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Processing failed")
+        raise HTTPException(status_code=500, detail=f"Processing failed (successfully processed submissions={successfully_processed})")
 
 
 
