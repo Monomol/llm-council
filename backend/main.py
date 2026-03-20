@@ -1,5 +1,6 @@
 """FastAPI backend for LLM Council."""
 
+from datetime import datetime
 import time
 from fastapi import FastAPI, Depends, HTTPException, Request, status, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -44,6 +45,9 @@ def validate_token(request: Request, credentials: HTTPAuthorizationCredentials =
     return credentials.credentials
 
 
+def switch_user_assistant(transcript: str):
+    return "### ASSISTANT".join(map(lambda x: x.replace("### ASSISTANT", "### USER"), transcript.split("### USER")))
+
 @app.get("/")
 async def root():
     """Health check endpoint."""
@@ -79,7 +83,12 @@ async def process(payload: ProcessPayload, request: Request, background_tasks: B
         )
 
         for submission in sumbissions:
+    
             submission_start = time.perf_counter()
+
+            # TODO: hopefully, we should be able to remove this soon
+            if payload.pipe_id == "pb160_week02_04_exam" and submission.created_at < datetime(2026, 3, 16):
+                submission.transcript = switch_user_assistant(submission.transcript)
 
             logger.info(f"[{trace_id}] Sub-task: Starting Council for Student {submission.email} (ID: {submission.id})")
             storage.create_conversation(submission.id)
