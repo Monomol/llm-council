@@ -21,8 +21,8 @@ Your final response must follow this structure:
 
 * **Executive Summary:** A high-level overview of the examination's flow and the USER's general performance style.
 * **The Examined Topics:** A bulleted list of all distinct subjects or sub-topics covered.
-* **Demonstrated Mastery (Understood):** List the topics the USER truly understands. **Evidence Required:** For each topic, quote or reference specific parts of the transcript and explain why their response demonstrates mastery.
-* **Knowledge Gaps (Not Understood):** List the topics where the USER failed or struggled. **Evidence Required:** Reference specific errors or misconceptions found in the transcript.
+* **Demonstrated Mastery (Understood):** List the topics the USER truly understands. **Evidence Required:** For each topic, quote or reference specific parts of the transcript and explain why their response demonstrates mastery. Reference the corresponding question number.
+* **Knowledge Gaps (Not Understood):** List the topics where the USER failed or struggled. **Evidence Required:** Reference specific errors or misconceptions found in the transcript. Also, reference the corresponding question number.
 * **Targeted Study Recommendations:** Based strictly on the identified gaps, suggest specific areas or concepts the USER should study next.
 
 ### 3. Critical Constraints
