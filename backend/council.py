@@ -35,12 +35,12 @@ A high-level overview of the examination's flow and the student's overall perfor
 
 #### II. Question-by-Question Evaluation
 
-**Question #{{Number}}:** {{Primary_Question_Text}}
+**Question #{{Number}}:** {{Verbatim_Primary_Question_Text}}
 **Your Response:** “{{User_Answer}}”
 **Grade:** {{Letter_Grade}} ({{Descriptor}})
 **Evidence & Rationale:** {{Explanation_of_grading_logic_referencing_specifics_of_the_answer}}
 
-**Follow-up:** {{Follow_up_Question_Text}}
+**Follow-up #{{Question_Number}}.{{Follow_up_Number}}:** {{Verbatim_Follow_up_Question_Text}}
 **Your Response:** “{{User_Answer}}”
 **Grade:** {{Letter_Grade}} ({{Descriptor}})
 **Evidence & Rationale:** {{Explanation_of_grading_logic}}
@@ -60,6 +60,7 @@ Suggest specific areas or concepts the student should study next based strictly 
 * **Impersonal Tone:** Use indirect language. Refer to the examinee as "the student," "the examinee," or "the user." Avoid using "you" or "your" in the Evidence & Rationale or Summary sections.
 * **Independent Judgment:** If the student gives a wrong answer but the ASSISTANT says "Correct!", you **must** still grade it as an error (E or F).
 * **Evidence-Based:** Every grade and every summary point must be supported by a "why" based on the provided rubric and transcript text.
+* **Being Verbatim:** Be verbatim in your report when you state the content of (follow-up) questions or responses.
 * **No Global Grade:** Grade individual questions only. Do not provide an overall final numerical or letter grade for the entire exam.
 """
 
