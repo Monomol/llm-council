@@ -2,8 +2,14 @@
 
 import httpx
 from typing import List, Dict, Any, Optional
+import logging
 from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
+import asyncio
 
+
+logger = logging.getLogger(__name__)
+
+MAX_ATTEMPTS = 3
 
 async def query_model(
     model: str,
@@ -30,27 +36,32 @@ async def query_model(
         "model": model,
         "messages": messages,
     }
+    for attempt_idx in range(MAX_ATTEMPTS):
+        try:
+            # Note that here a new client is created every time we try to repeat the request
+            # Without it I got Too many requests error
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(
+                    OPENROUTER_API_URL,
+                    headers=headers,
+                    json=payload
+                )
+                response.raise_for_status()
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                OPENROUTER_API_URL,
-                headers=headers,
-                json=payload
-            )
-            response.raise_for_status()
+                data = response.json()
+                message = data['choices'][0]['message']
 
-            data = response.json()
-            message = data['choices'][0]['message']
+                return {
+                    'content': message.get('content'),
+                    'reasoning_details': message.get('reasoning_details')
+                }
 
-            return {
-                'content': message.get('content'),
-                'reasoning_details': message.get('reasoning_details')
-            }
+        except Exception as e:
+            # TODO: in the future use contextvars and implement logging with trace_id here
+            logger.error(f"Error querying model {model} Attempt #{attempt_idx+1}: {e}")
+            await asyncio.sleep(10)
+    return None
 
-    except Exception as e:
-        print(f"Error querying model {model}: {e}")
-        return None
 
 
 async def query_models_parallel(
@@ -69,11 +80,31 @@ async def query_models_parallel(
     """
     import asyncio
 
-    # Create tasks for all models
-    tasks = [query_model(model, messages) for model in models]
 
-    # Wait for all to complete
-    responses = await asyncio.gather(*tasks)
+    async def wrapped_query(m):
+        res = await query_model(m, messages, 60)
+        return m, res
 
-    # Map models to their responses
-    return {model: response for model, response in zip(models, responses)}
+    tasks = [asyncio.create_task(wrapped_query(m)) for m in models]
+    final_results = {}
+
+    try:
+        for next_task in asyncio.as_completed(tasks):
+            model_name, result = await next_task
+            
+            if result is None:
+                logger.warning(f"Model {model_name} failed. Cancelling all other tasks.")
+                return None
+            
+            final_results[model_name] = result
+
+        return final_results
+
+    except Exception as e:
+        # TODO: consider adding logging here
+        return None
+
+    finally:
+        for t in tasks:
+            if not t.done():
+                t.cancel()

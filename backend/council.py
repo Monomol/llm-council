@@ -78,6 +78,8 @@ async def stage1_collect_responses(user_query: str, system_prompt: str) -> List[
 
     # Query all models in parallel
     responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    if responses is None:
+        return None
 
     # Format results
     stage1_results = []
@@ -162,6 +164,8 @@ Now provide your evaluation and ranking:"""
 
     # Get rankings from all council models in parallel
     responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    if responses is None:
+        return None
 
     # Format results
     stage2_results = []
@@ -242,10 +246,7 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     if response is None:
         # Fallback if chairman fails
-        return {
-            "model": CHAIRMAN_MODEL,
-            "response": "Error: Unable to generate final synthesis."
-        }
+        return None
 
     return {
         "model": CHAIRMAN_MODEL,
@@ -386,14 +387,20 @@ async def run_full_council(user_query: str, system_prompt: str) -> Tuple[List, L
     stage1_results = await stage1_collect_responses(user_query, system_prompt)
 
     # If no models responded successfully, return error
-    if not stage1_results:
+    if stage1_results is None:
         return [], [], {
             "model": "error",
-            "response": "All models failed to respond. Please try again."
+            "response": "Some models failed to respond (stage1). For further info check the logs."
         }, {}
 
     # Stage 2: Collect rankings
     stage2_results, label_to_model = await stage2_collect_rankings(user_query, system_prompt, stage1_results)
+    
+    if stage2_results is None:
+        return [], [], {
+            "model": "error",
+            "response": "Some models failed to respond (stage2). For further info check the logs."
+        }, {}
 
     # Calculate aggregate rankings
     aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
@@ -405,6 +412,12 @@ async def run_full_council(user_query: str, system_prompt: str) -> Tuple[List, L
         stage1_results,
         stage2_results
     )
+
+    if stage3_result is None:
+        return [], [], {
+            "model": "error",
+            "response": "Unable to generate final synthesis (stage3). For further info check the logs."
+        }, {}
 
     # Prepare metadata
     metadata = {
