@@ -29,7 +29,6 @@ class Submit(Base):
         return f"Submit(id='{self.id}', email='{self.email}', pipe_id='{self.pipe_id}', transcript='...', created_at='{self.created_at}')"
 
 def get_submissions(payload: ProcessPayload) -> List[Submit]:
-    print(f"DEBUG: pipe_id={payload.pipe_id}, submit_ids={payload.submit_ids}")
     with Session(engine) as session:
         inner_stmt = (
             select(Submit)
