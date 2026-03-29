@@ -3,20 +3,23 @@ from typing import List, Dict, Any, Optional
 import logging
 from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
 import asyncio
+import random
 
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-MAX_CONCURRENT_REQUESTS = 5
+MAX_CONCURRENT_REQUESTS = 6
+
+DEFAULT_TIMEOUT=140
 
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
-_client = httpx.AsyncClient(timeout=120.0)
+_client = httpx.AsyncClient(timeout=DEFAULT_TIMEOUT)
 
 
 async def query_model(
     model: str,
     messages: List[Dict[str, str]],
-    timeout: float = 120.0
+    timeout: float = DEFAULT_TIMEOUT
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
@@ -53,7 +56,7 @@ async def query_model(
         except Exception as e:
             # TODO: in the future use contextvars and implement logging with trace_id here
             logger.error(f"Error querying model {model} Attempt #{attempt_idx+1}: {e}")
-            await asyncio.sleep(10 * (attempt_idx + 1))
+            await asyncio.sleep(11 * (attempt_idx + 1) * random.uniform(1, 1.4))
     return None
 
 
