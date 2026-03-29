@@ -1,15 +1,17 @@
-"""OpenRouter API client for making LLM requests."""
-
 import httpx
 from typing import List, Dict, Any, Optional
 import logging
 from .config import OPENROUTER_API_KEY, OPENROUTER_API_URL
 import asyncio
 
-
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
+MAX_CONCURRENT_REQUESTS = 5
+
+_semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+_client = httpx.AsyncClient(timeout=120.0)
+
 
 async def query_model(
     model: str,
@@ -18,14 +20,6 @@ async def query_model(
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via OpenRouter API.
-
-    Args:
-        model: OpenRouter model identifier (e.g., "openai/gpt-4o")
-        messages: List of message dicts with 'role' and 'content'
-        timeout: Request timeout in seconds
-
-    Returns:
-        Response dict with 'content' and optional 'reasoning_details', or None if failed
     """
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -36,15 +30,15 @@ async def query_model(
         "model": model,
         "messages": messages,
     }
+
     for attempt_idx in range(MAX_ATTEMPTS):
         try:
-            # Note that here a new client is created every time we try to repeat the request
-            # Without it I got Too many requests error
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(
+            async with _semaphore:
+                response = await _client.post(
                     OPENROUTER_API_URL,
                     headers=headers,
-                    json=payload
+                    json=payload,
+                    timeout=timeout
                 )
                 response.raise_for_status()
 
@@ -59,9 +53,8 @@ async def query_model(
         except Exception as e:
             # TODO: in the future use contextvars and implement logging with trace_id here
             logger.error(f"Error querying model {model} Attempt #{attempt_idx+1}: {e}")
-            await asyncio.sleep(10)
+            await asyncio.sleep(10 * (attempt_idx + 1))
     return None
-
 
 
 async def query_models_parallel(
@@ -78,8 +71,6 @@ async def query_models_parallel(
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
     """
-    import asyncio
-
 
     async def wrapped_query(m):
         res = await query_model(m, messages, 60)
