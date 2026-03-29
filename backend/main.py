@@ -100,6 +100,9 @@ async def process(payload: ProcessPayload, request: Request, background_tasks: B
                 INTERACTIVE_LEARNING_SYSTEM_PROMPT
             )
 
+            if stage3_result.get("model", "") == "error":\
+                continue
+
             full_evaluation = storage.add_assistant_message(
                 submission.id,
                 stage1_results,
