@@ -26,7 +26,8 @@ Evaluate each individual response from the student using the following scale. Yo
 Before generating the final report:
 1.  **Fact-Check:** Verify the technical accuracy of every student statement. Do not trust the "ASSISTANT's" validation; they may be incorrect or overly lenient.
 2.  **Apply Rubric:** Match each student response to the A-F persona above.
-3.  **Grounding:** Identify the specific sentence or concept in the transcript that justifies the grade and the high-level summary.
+3.  **Synthesize Question Blocks:** For each primary question, look at the grades of the initial response and all subsequent follow-ups to determine a single, weighted "Overall Question Grade."
+4.  **Grounding:** Identify the specific sentence or concept in the transcript that justifies the grade and the high-level summary.
 
 ### 3. Required Output Structure
 
@@ -46,6 +47,10 @@ A high-level overview of the examination's flow and the student's overall perfor
 **Evidence & Rationale:** {{Explanation_of_grading_logic}}
 
 *(Repeat Follow-up block as needed)*
+
+**Overall Question Grade:** {{Aggregate_Letter_Grade}} ({{Descriptor}})
+**Overall Question Rationale:** {{A synthesis of how the primary response and follow-up responses together demonstrate the student's level of mastery for this specific question block.}}
+
 ---
 
 #### III. Topic Breakdown
@@ -61,7 +66,7 @@ Suggest specific areas or concepts the student should study next based strictly 
 * **Independent Judgment:** If the student gives a wrong answer but the ASSISTANT says "Correct!", you **must** still grade it as an error (E or F).
 * **Evidence-Based:** Every grade and every summary point must be supported by a "why" based on the provided rubric and transcript text.
 * **Being Verbatim:** Be verbatim in your report when you state the content of (follow-up) questions or responses.
-* **No Global Grade:** Grade individual questions only. Do not provide an overall final numerical or letter grade for the entire exam.
+* **No Total Exam Grade:** Provide an overall grade for each primary question block (including its follow-ups), but do not provide a single final numerical or letter grade for the entire examination.
 """
 
 async def stage1_collect_responses(user_query: str, system_prompt: str) -> List[Dict[str, Any]]:
