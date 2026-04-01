@@ -8,9 +8,9 @@ import random
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
-MAX_CONCURRENT_REQUESTS = 6
+MAX_CONCURRENT_REQUESTS = 3
 
-DEFAULT_TIMEOUT=140
+DEFAULT_TIMEOUT=360
 
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
 _client = httpx.AsyncClient(timeout=DEFAULT_TIMEOUT)
@@ -34,9 +34,9 @@ async def query_model(
         "messages": messages,
     }
 
-    for attempt_idx in range(MAX_ATTEMPTS):
-        try:
-            async with _semaphore:
+    async with _semaphore:
+        for attempt_idx in range(MAX_ATTEMPTS):
+            try:
                 response = await _client.post(
                     OPENROUTER_API_URL,
                     headers=headers,
@@ -53,10 +53,10 @@ async def query_model(
                     'reasoning_details': message.get('reasoning_details')
                 }
 
-        except Exception as e:
-            # TODO: in the future use contextvars and implement logging with trace_id here
-            logger.error(f"Error querying model {model} Attempt #{attempt_idx+1}: {e}")
-            await asyncio.sleep(11 * (attempt_idx + 1) * random.uniform(1, 1.4))
+            except Exception as e:
+                # TODO: in the future use contextvars and implement logging with trace_id here
+                logger.error(f"Error querying model {model} Attempt #{attempt_idx+1}: {e}")
+                await asyncio.sleep(30 * (attempt_idx + 1) * random.uniform(1, 1.4))
     return None
 
 
@@ -76,7 +76,7 @@ async def query_models_parallel(
     """
 
     async def wrapped_query(m):
-        res = await query_model(m, messages, 60)
+        res = await query_model(m, messages, DEFAULT_TIMEOUT)
         return m, res
 
     tasks = [asyncio.create_task(wrapped_query(m)) for m in models]
