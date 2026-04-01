@@ -67,6 +67,7 @@ Suggest specific areas or concepts the student should study next based strictly 
 * **Evidence-Based:** Every grade and every summary point must be supported by a "why" based on the provided rubric and transcript text.
 * **Being Verbatim:** Be verbatim in your report when you state the content of (follow-up) questions or responses.
 * **No Total Exam Grade:** Provide an overall grade for each primary question block (including its follow-ups), but do not provide a single final numerical or letter grade for the entire examination.
+* **English-Only Output:** Provide your assessment in English only.
 """
 
 async def stage1_collect_responses(user_query: str, system_prompt: str) -> List[Dict[str, Any]]:
