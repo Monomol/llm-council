@@ -15,6 +15,7 @@ from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
 from .db import get_submissions
 from .config import ALLOWED_TOKENS
 from .objects import ProcessPayload
+from .md2json import convert_transcript
 
 logging.basicConfig(
     filename="data/logs/log.txt",
@@ -89,6 +90,12 @@ async def process(payload: ProcessPayload, request: Request, background_tasks: B
             # TODO: hopefully, we should be able to remove this soon
             if payload.pipe_id == "pb160_week02_04_exam" and submission.created_at < datetime(2026, 3, 16):
                 submission.transcript = switch_user_assistant(submission.transcript)
+            
+            try:
+                submission.transcript = convert_transcript(submission.transcript)
+            except Exception as e:
+                logger.error(f"[{trace_id}] Transcript conversion failure (skipping Submit(id='{submission.id}')): {str(e)}")
+                continue
 
             logger.info(f"[{trace_id}] Sub-task: Starting Council for Student {submission.email} (ID: {submission.id})")
             storage.create_conversation(submission.id)
