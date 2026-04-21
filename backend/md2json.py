@@ -18,7 +18,7 @@ import re
 import json
 
 
-def convert_transcript(text: str) -> list[dict]:
+def convert_transcript(text: str, check_beginning: bool = True) -> list[dict]:
     pattern = re.compile(r"### (USER|ASSISTANT)\n")
     parts = pattern.split(text)
 
@@ -59,19 +59,20 @@ def convert_transcript(text: str) -> list[dict]:
     if first_q_idx is None:
         raise ValueError("No questions found in transcript.")
 
-    prev_user = None
-    for idx in range(first_q_idx - 1, -1, -1):
-        if normalised[idx]["role"] == "USER":
-            prev_user = normalised[idx]["content"].strip().lower()
-            break
+    if check_beginning:
+        prev_user = None
+        for idx in range(first_q_idx - 1, -1, -1):
+            if normalised[idx]["role"] == "USER":
+                prev_user = normalised[idx]["content"].strip().lower()
+                break
 
-    # the user turn immediately before the first question must be "info" or "next"
-    # otherwise the model started hallucinating questions
-    if prev_user not in ("info", "next"):
-        raise ValueError(
-            f"Malformed transcript: expected user message 'info'/'next' before first question,\n"
-            f"Found: '{prev_user}'."
-        )
+        # the user turn immediately before the first question must be "info" or "next"
+        # otherwise the model started hallucinating questions
+        if prev_user not in ("info", "next"):
+            raise ValueError(
+                f"Malformed transcript: expected user message 'info'/'next' before first question,\n"
+                f"Found: '{prev_user}'."
+            )
 
     relevant = normalised[first_q_idx:]
 

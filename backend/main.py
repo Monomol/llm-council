@@ -55,6 +55,10 @@ async def root():
     return {"status": "ok", "service": "LLM Council API"}
     
 
+# some pipes have/had to start with info/next, some can start with anything, there is a check for 
+# next/info, which should run only for relevant pipes
+BEGINNING_CHECK_EXCLUSION=["pv160_week05_06_exam"]
+
 @app.post("/process", status_code=status.HTTP_200_OK, dependencies=[Depends(validate_token)])
 @limiter.limit("100/minute")
 async def process(payload: ProcessPayload, request: Request, background_tasks: BackgroundTasks) -> dict:
@@ -92,7 +96,7 @@ async def process(payload: ProcessPayload, request: Request, background_tasks: B
                 submission.transcript = switch_user_assistant(submission.transcript)
             
             try:
-                submission.transcript = convert_transcript(submission.transcript)
+                submission.transcript = convert_transcript(submission.transcript, submission.pipe_id not in BEGINNING_CHECK_EXCLUSION)
             except Exception as e:
                 logger.error(f"[{trace_id}] Transcript conversion failure (skipping Submit(id='{submission.id}')): {str(e)}")
                 continue
