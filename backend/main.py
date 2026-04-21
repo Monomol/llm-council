@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from . import storage
-from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT
+from .council import run_full_council, INTERACTIVE_LEARNING_SYSTEM_PROMPT, EXAM_SYSTEM_PROMPT
 from .db import get_submissions
 from .config import ALLOWED_TOKENS
 from .objects import ProcessPayload
@@ -106,9 +106,14 @@ async def process(payload: ProcessPayload, request: Request, background_tasks: B
             storage.add_user_message(submission.id, submission.transcript)
 
             # Run the 3-stage council process
+            if payload.ilp_assessment:
+                chosen_prompt = INTERACTIVE_LEARNING_SYSTEM_PROMPT
+            else:
+                chosen_prompt = EXAM_SYSTEM_PROMPT
+
             stage1_results, stage2_results, stage3_result, metadata = await run_full_council(
                 submission.transcript,
-                INTERACTIVE_LEARNING_SYSTEM_PROMPT
+                chosen_prompt
             )
 
             if stage3_result.get("model", "") == "error":

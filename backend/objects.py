@@ -8,3 +8,4 @@ class ProcessPayload(BaseModel):
     student_emails: Optional[Set[str]] = None
     random_sample: bool = False
     head_n_results: Optional[int] = None
+    ilp_assessment: bool = False
