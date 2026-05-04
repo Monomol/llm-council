@@ -16,10 +16,10 @@ ALLOWED_TOKENS = set(
 
 # Council members - list of OpenRouter model identifiers
 COUNCIL_MODELS = [
-    "deepseek-v3.2-thinking",
+    "deepseek-v4-pro",
     "gpt-oss-120b",
     # "mistral-large", # seems to be broken?
-    "glm-4.7"
+    "glm-5.1"
 ]
 
 # Chairman model - synthesizes final response
